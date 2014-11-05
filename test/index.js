@@ -22,6 +22,16 @@ describe('Module', function() {
         expect(module.isPrototypeOf(child)).to.be.true;
         expect(module.isPrototypeOf(grandchild)).to.be.true;
     });
+
+    it('should allow multiple service definitions to be specified at once', function() {
+        var module = pioc.createModule();
+        module.bind({
+            foo: function() {},
+            bar: function() {}
+        });
+        expect(module.has('foo')).to.be.true;
+        expect(module.has('bar')).to.be.true;
+    });
 });
 
 describe('Provider', function() {
@@ -114,6 +124,101 @@ describe('Provider', function() {
             parentMessage = provider.get('message');
         subModule.value('message', 'Hello Universe');
         expect(childProvider.get('greeting')).to.equal('Hello Universe!');
+    });
+
+    it('should find all services for a given prefix', function() {
+        module.bind('route/api', function(message) { return message; });
+        module.bind('route/auth', function(greeting) { return greeting; });
+
+        var subModule = module.create(),
+            childProvider = provider.create(subModule);
+
+        var routes = childProvider.getAll('route');
+        expect(routes.length).to.equal(2);
+        expect(routes[0]).to.equal('Hello World');
+        expect(routes[1]).to.equal('Hello World!');
+    });
+
+    it('should create a new instance of a class if needed', function() {
+        function Post(message) {
+            this.message = message;
+        }
+        Post.prototype = Object.create(Object.prototype, {
+            constructor: { value: Post },
+            deliver: {
+                value: function() {
+                    return this.message;
+                }
+            }
+        });
+        module.bind('post', Post);
+        var post = provider.get('post');
+        expect(post).to.be.instanceOf(Post);
+        expect(post.deliver()).to.equal('Hello World');
+    });
+
+    it('should inject properties into an object', function() {
+        var inject = pioc.inject;
+        module.bind('post', {
+            deliver: function() {
+                return this.message;
+            },
+            message: inject('greeting'),
+            greeting: inject('message')
+        });
+        var post = provider.get('post');
+        expect(post.deliver()).to.equal('Hello World!');
+        expect(post.greeting).to.equal('Hello World');
+    });
+
+    it('should inject properties into a constructor', function() {
+        var inject = pioc.inject;
+        function Post() {
+            expect(this).to.be.instanceOf(Post);
+            expect(this.message).to.equal('Hello World');
+        }
+        Post.prototype = Object.create(Object.prototype, {
+            constructor: { value: Post },
+            message: { value: inject('message') },
+            greeting: { value: inject() },
+            deliver: {
+                value: function() {
+                    return this.message;
+                }
+            }
+        });
+        module.bind('post', Post);
+        var post = provider.get('post');
+        expect(post.greeting).to.equal('Hello World!');
+    });
+
+    it('should inject properties into an object when using inject(obj, ...propNames)', function() {
+        var inject = pioc.inject;
+        function Post() {
+            expect(this).to.be.instanceOf(Post);
+            expect(this.message).to.equal('Hello World');
+        }
+        Post.prototype.deliver = function() { return this.message; };
+        inject(Post.prototype, 'message', 'greeting');
+
+        module.bind('post', Post);
+        var post = provider.get('post');
+        expect(post.greeting).to.equal('Hello World!');
+    });
+
+    it('should inject properties into an object when using inject(...propNames, constructor)', function() {
+        var inject = pioc.inject;
+        var Post = inject('message', 'greeting',
+            function Post() {
+                expect(this).to.be.instanceOf(Post);
+                expect(this.message).to.equal('Hello World');
+            }
+        );
+        Post.prototype.deliver = function() { return this.message; };
+
+        module.bind('post', Post);
+        var post = provider.get('post');
+        expect(post.greeting).to.equal('Hello World!');
     });
 });
 
@@ -217,5 +322,22 @@ describe('Injector', function() {
                 expect(obj).to.exist;
             }
         ]);
+    });
+
+    it('should return a list of prefixed services if no module is registered for the name', function() {
+        module.bind('routes/api', function(message) { return message; });
+        module.bind('routes/auth', function(greeting) { return greeting; });
+
+        injector.resolve(function(routes) {
+            expect(routes.length).to.equal(2);
+            expect(routes[0]).to.equal('Hello World');
+            expect(routes[1]).to.equal('Hello World!');
+        });
+    });
+
+    it('should ignore comments in dependency declaration', function() {
+        injector.resolve(function(/* some stupid stuff */message, /** @type Foobar */ greeting) {
+            expect(message).to.equal('Hello World');
+        });
     });
 });

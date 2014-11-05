@@ -2,10 +2,11 @@ var path = require('path'),
     servicePropertyPrefix = '$$service-';
 
 function parseFunctionArguments(func) {
-    // TODO: Either parse or ignore any comments that are contained in the argument list
-//return func.toString().match(/function\s*\w*\s*\((.*?)\)/)[1].split(/\s*,\s*/);
     var args = func.toString ().match (/^\s*function\s+(?:\w*\s*)?\((.*?)\)/);
     args = args ? (args[1] ? args[1].trim ().split (/\s*,\s*/) : []) : null;
+    args = args && args.map(function(arg) {
+        return arg.replace(/\/\*.*\*\//g, '').trim();
+    });
     return args;
 }
 
@@ -25,13 +26,48 @@ function getDependencyList(service) {
     var toString = Object.prototype.toString,
         type = toString.call(service);
     if(type === '[object Function]') {
-        return service.$requires || parseFunctionArguments(service);
+        return {
+            callInjection: service.$requires || parseFunctionArguments(service),
+            propertyInjection: service.prototype && getInjectableProperties(service.prototype)
+        };
     } else if(type === '[object Array]') {
         if(isArrayNotation(service)) {
-            return service.slice(0, service.length-1);
+            return {callInjection: service.slice(0, service.length-1), propertyInjection: [] };
+        }
+    } else if(service === Object(service)) {
+        return { callInjection: [], propertyInjection: getInjectableProperties(service) };
+    }
+    return {callInjection: [], propertyInjection: []};
+}
+
+function getInjectableProperties(inst) {
+    var properties = [],
+        propertyNames = getPropertyDescriptors(inst);
+    for(var i = 0, len = propertyNames.length; i < len; i++) {
+        var property = propertyNames[i],
+            descriptor = property.descriptor,
+            propName = property.name;
+        if(descriptor.value && descriptor.value.$$inject) {
+            properties[properties.length] = {serviceName: descriptor.value.serviceName || propName, propName: propName};
         }
     }
-    return [];
+    return properties;
+}
+
+function getPropertyDescriptors(obj, omitDescriptors) {
+    var unique = {},
+        properties = [];
+    for(var proto = obj; proto && proto !== Object.prototype; proto = Object.getPrototypeOf(proto)) {
+        var names = Object.getOwnPropertyNames(proto);
+        for(var i = 0, len = names.length; i < len; i++) {
+            var name = names[i];
+            if(!unique['$$'+name]) {
+                unique['$$'+name] = true;
+                properties[properties.length] = {name: name, descriptor: omitDescriptors || Object.getOwnPropertyDescriptor(proto, name)};
+            }
+        }
+    }
+    return properties;
 }
 
 function getFactory(service) {
@@ -41,65 +77,58 @@ function getFactory(service) {
         return service;
     } else if(type === '[object Array]' && isArrayNotation(service)) {
         return service[service.length-1];
+    } else if (service === Object(service)) {
+        var factory = function() { return service; };
+        factory.prototype = service;
+        factory.$isObjectFactory = true;
+        return factory;
     }
     return function() { return service; };
 }
 
 function resolve(service, provider) {
-    var args = service.dependencies.map(function(arg) {
-        return provider.get(arg);
-    });
-    return service.factory.apply(null, args);
+    var inst,
+        args = service.dependencies.callInjection.map(function(serviceName) {
+            return provider.$module.has(serviceName) ? provider.get(serviceName) : provider.getAll(serviceName);
+        });
+    if(service.factory.$isObjectFactory) {
+        inst = service.factory();
+    } else {
+        inst = Object.create(service.factory.prototype || Object.prototype);
+    }
+    for(var propInjections = service.dependencies.propertyInjection, i = 0, len = propInjections.length; i < len; i++) {
+        var prop = propInjections[i], serviceName = prop.serviceName;
+        Object.defineProperty(inst, prop.propName, { value: provider.$module.has(serviceName) ? provider.get(serviceName) : provider.getAll(serviceName) });
+    }
+    return service.factory.$isObjectFactory ? inst : (service.factory.apply(inst, args) || inst);
 }
 
-var ToObject = {
-    $type: 'singleton',
-    $module: null,
-    $name: null,
-    to: function(service) {
-        switch(this.$type) {
-            case 'singleton':
-                this.$module.bind(this.$name, service);
-                break;
-            case 'value':
-                this.$module.value(this.$name, service);
-                break;
-            case 'factory':
-                this.$module.bindFactory(this.$name, service);
-                break;
-        }
-
-        return this.$module;
-    },
-
-    toFile: function(filename) {
-        var servicePath = path.join(this.$module.__dirname, filename);
-        return this.to(this.$name, require(servicePath));
-    }
-};
-
 var Module = {
+    has: function(name) {
+        return !!this[servicePropertyPrefix+name];
+    },
     value: function(name, service) {
         if(arguments.length === 1) {
-            return Object.create(ToObject, {
-                $type: 'value',
-                $module: { value: this },
-                $name: { value: name }
-            });
+            var names = Object.getOwnPropertyNames(name);
+            for(var i = 0, len = names.length; i < len; i++) {
+                var serviceName = names[i];
+                this.value(serviceName, name[serviceName]);
+            }
         }
         this[servicePropertyPrefix+name] = {
             factory: function() { return service; },
             singleton: true,
-            dependencies: []
+            dependencies: {callInjection: [], propertyInjection: []}
         };
         return this;
     },
     bind: function(name, service) {
         if(arguments.length === 1) {
-            return Object.create(ToObject, {
-                $module: { value: this },
-                $name: { value: name }
-            });
+            var names = Object.getOwnPropertyNames(name);
+            for(var i = 0, len = names.length; i < len; i++) {
+                var serviceName = names[i];
+                this.value(serviceName, name[serviceName]);
+            }
         }
         this[servicePropertyPrefix+name] = {
             factory: getFactory(service),
@@ -110,11 +139,11 @@ var Module = {
     },
     bindFactory: function(name, service) {
         if(arguments.length === 1) {
-            return Object.create(ToObject, {
-                $type: 'factory',
-                $module: { value: this },
-                $name: { value: name }
-            });
+            var names = Object.getOwnPropertyNames(name);
+            for(var i = 0, len = names.length; i < len; i++) {
+                var serviceName = names[i];
+                this.value(serviceName, name[serviceName]);
+            }
         }
         this[servicePropertyPrefix+name] = {
             factory: getFactory(service),
@@ -186,7 +215,7 @@ function isResponsibleFor(provider, name, service, $parent) {
         return false;
     }
 
-    var dependencies = service.dependencies;
+    var dependencies = service.dependencies.callInjection.concat(service.dependencies.propertyInjection);
     for(var i = 0, len = dependencies.length; i < len; i++) {
         var dependency = dependencies[i],
             isResponsibleForDependency = isResponsibleFor(
@@ -204,11 +233,30 @@ function isResponsibleFor(provider, name, service, $parent) {
     return false;
 }
 
+function filterPrefix(prefix) {
+    return function(str) {
+        return str.length >= prefix.length && str.substring(0, prefix.length) === prefix;
+    };
+}
+
 var Provider = {
     $module: null,
     $cache: null,
     $resolving: null,
     $responsibleFor: null,
+    has: function(name) {
+        return this.$module.has(name);
+    },
+    getAll: function(name) {
+        var result = [],
+            filter = filterPrefix(servicePropertyPrefix+name);
+        for(var serviceName in this.$module) {
+            if(filter(serviceName)) {
+                result[result.length] = this.get(serviceName.substring(servicePropertyPrefix.length));
+            }
+        }
+        return result;
+    },
     get: function(name) {
         if(this.$resolving[servicePropertyPrefix+name]) {
             throw new Error('Circular dependency detected. Trying to resolve '+name+' when it is already being resolved.');
@@ -218,6 +266,11 @@ var Provider = {
             // fail fast
             var service = this.$module[servicePropertyPrefix+name];
             if(!service) {
+                // now service with that name exists, let's see if it is a prefix
+                var services = this.getAll(name);
+                if(services.length) {
+                    return services;
+                }
                 throw new Error('Trying to resolve an unknown service '+name);
             }
 
@@ -298,6 +351,38 @@ var pioc = {
             });
 
         return $injector;
+    },
+
+    inject: function(serviceName) {
+        if(arguments.length > 1) {
+            var target, i, len, result;
+            if(Object.prototype.toString.call(serviceName) === '[object String]') {
+                result = target = arguments[arguments.length-1];
+                target = target.prototype || target;
+                i = 0;
+                len = arguments.length-1;
+            } else {
+                result = serviceName;
+                target = serviceName.prototype || serviceName;
+                i = 1;
+                len = arguments.length;
+            }
+            for(; i < len; i++) {
+                var propName = arguments[i];
+                Object.defineProperty(target, propName, {
+                    configurable: true,
+                    value: {
+                        serviceName: propName,
+                        $$inject: true
+                    }
+                });
+            }
+            return result;
+        }
+        return {
+            serviceName: serviceName,
+            $$inject: true
+        };
     }
 };
 
@@ -307,7 +392,7 @@ Module[servicePropertyPrefix+'$pioc'] = {
         return pioc;
     },
     singleton: true,
-    dependencies: []
+    dependencies: {callInjection: [], propertyInjection: [] }
 };
 
 module.exports = pioc;

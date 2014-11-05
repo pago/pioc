@@ -5,6 +5,16 @@ please take a look at [Martin Fowlers Article](http://www.martinfowler.com/artic
 Don't be afraid, this is a tool for Javascript, not Java, so you won't need to write
 XML or anything like that to configure **pioc**.
 
+The short story is that **pioc** will allow you to write loosely coupled modules which enable you to easily switch specific implementations with something else (i.e. for tests or during natural growth of an application) without the mess that you'd normally have to work through.
+
+**pioc** is very smart about how and *when* to initialize your services. It supports **constructor injection**, **property injection**, static values and even **module inheritance** with all the parts that are needed to make it work.
+
+If you were writing Java, **pioc** would remove the need for the "new" keyword in your vocabulary. For Javascript, it does the same but it also removes many function invocations, *require* statements and so on.
+
+Whether you're writing an **express.js** application or a website, **pioc** has the features you need to be more productive and it has an extensive test suite.
+
+## License
+
 **pioc** is *MIT* licensed.
 
 ## Installation
@@ -73,6 +83,18 @@ injector.resolve(function(db) {
     });
 });
 ```
+
+## Changes
+
+### Version 1.1
+
+- **Provider#getAll(servicePrefix)**: Returns a list of all services that start with the given prefix
+- **Property injection**: Constructor functions and objects can use pioc.inject to specify properties that should be injected during the resolve process
+- **Object instantiation**: Services can now be constructors instead of just simple factory functions.
+- Undocumented Module#bind(serviceName).to(serviceDefinition) has been *removed*.
+- **Module#bind(obj), Module#value(obj), Module#factory(obj)**: Binds all services defined in the object to their property name.
+- **Module#has(serviceName)**: Returns `true`, if the service is defined in the module (or a parent module); `false`, otherwise.
+- Comments in function declarations are *ignored* (would've resulted in an error previously).
 
 ## Structure
 
@@ -185,16 +207,121 @@ Creates a new *Provider* for the given *Module*.
 Creates a new *Injector* for the given *Module*. The *Injector* will use
 the a child of the given *Provider* or a new one.
 
+#### inject(serviceName: String): Object
+Creates an injectable annotation that signals pioc to inject the required service during the resolve process.
+
+*Example*
+
+```javascript
+var inject = pioc.inject;
+module
+    .value('message', 'Hello World!')
+    .bind('foo', {
+        message: inject('message'),
+        sayHello: function() {
+            console.log(this.message);
+        }
+    });
+provider.get('foo').sayHello(); // => Hello World!
+```
+
+#### inject(): Object
+Creates an injectable annotation that signals pioc to inject the required service during the resolve process.
+The service name will be inferred through the property name.
+
+*Example*
+
+```javascript
+module
+    .value('message', 'Hello World!')
+    .bind('foo', {
+        message: pioc.inject(), // requires the service "message"
+        sayHello: function() {
+            console.log(this.message);
+        }
+    });
+provider.get('foo').sayHello(); // => Hello World!
+```
+
+#### inject(target:Function|Object, ...serviceNames): target
+Defines injectable annotations for the given service name on the object or the prototype
+of the function and returns the given `target`.
+
+*Example*
+
+```javascript
+var inject = pioc.inject;
+module
+    .value('message', 'Hello World!')
+    .bind('foo', inject({
+        sayHello: function() {
+            console.log(this.message);
+        }
+    }, 'message'));
+provider.get('foo').sayHello(); // => Hello World!
+```
+
+#### inject(...serviceNames, target:Function|Object): target
+Defines injectable annotations for the given service name on the object or the prototype
+of the function and returns the given `target`.
+
+*Example*
+
+```javascript
+var inject = pioc.inject;
+module
+    .value('message', 'Hello World!')
+    .bind('foo', inject('message', function() {
+        this.sayHello = function() {
+            console.log(this.message);
+        };
+    }));
+provider.get('foo').sayHello(); // => Hello World!
+```
 
 ### Injector
 
 #### resolve(service: Function|Array<String...,Function>): Any
 Resolves the specified service and returns whatever the service returned.
 
+If a dependency doesn't exist, it'll instead try to load all services with that prefix (see Provider#getAll).
+
+*Example*
+
+```javascript
+module
+    .value('config', { port: 3000 })
+    .bind('routes/auth', require('./app/modules/auth'))
+    .bind('routes/api', require('./app/modules/api'));
+var app = injector.resolve(function(routes, config) {
+    var app = express();
+    routes.forEach(function(route) { app.use(routes); });
+    return app.listen(config.port);
+});
+```
+
 ### Provider
 
-#### get(name: String): Any
-Returns an instance of the specified service.
+#### get(name: String): Any|Array<Any>
+Returns an instance of the specified service. If no service with the given name was found,
+an error will be thrown.
+
+**throws**: Error, if the specified *service* is not defined in the *module* or a parent of the *module* associated with the *Provider*.
+
+#### getAll(servicePrefix: String): Array<Any>
+Returns all services whose name starts with the given prefix.
+
+*Example*
+
+```javascript
+module
+    .bind('routes/auth', require('./app/modules/auth'))
+    .bind('routes/api', require('./app/modules/api'));
+var routes = provider.getAll('routes/');
+var app = express();
+routes.forEach(function(route) { app.use(routes); });
+app.listen(3000);
+```
 
 #### create(module: Module): Provider
 Returns a new child of this *Provider* with the specified child *Module*.
@@ -210,6 +337,23 @@ Binds the specified _service_ to the given _name_. A service that is bound using
 
 Returns the module to allow method chaining.
 
+#### value(serviceContainer: Object): Module
+For each _service_ as _name_ in _serviceContainer_, it binds the specified _service_ to the given _name_.
+A service that is bound using *value* will resolved as is, i.e. no dependencies will be injected into it.
+
+Returns the module to allow method chaining.
+
+*Example*
+
+```javascript
+module.value({
+    config: { port: 3000 },
+    db: { url: 'mongodb://...' }
+});
+provider.get('config').port === 3000;
+provider.get('db').url === 'mongodb://...';
+```
+
 #### bind(name: String, service: Any): Module
 Binds the specified _service_ to the given _name_. The service will be resolved
 when needed (i.e. lazy) and behaves like a singleton unless Inheritance requires
@@ -217,8 +361,23 @@ a new instance (i.e. dependencies have been reconfigured for a child module).
 
 Returns the module to allow method chaining.
 
+#### bind(serviceContainer: Object): Module
+For each _service_ as _name_ in _serviceContainer_, it binds the specified _service_ to the given _name_. The service will be resolved
+when needed (i.e. lazy) and behaves like a singleton unless Inheritance requires
+a new instance (i.e. dependencies have been reconfigured for a child module).
+
+Returns the module to allow method chaining.
+
 #### bindFactory(name: String, service: Any): Module
 Binds the specified _service_ to the given _name_. The service will be resolved
+when needed (i.e. lazy) and will be instantiated whenever the specified service is
+requested. This is intended to be used for services that should never behave like
+a singleton.
+
+Returns the module to allow method chaining.
+
+#### bindFactory(serviceContainer: Object): Module
+For each _service_ as _name_ in _serviceContainer_, it binds the specified _service_ to the given _name_. The service will be resolved
 when needed (i.e. lazy) and will be instantiated whenever the specified service is
 requested. This is intended to be used for services that should never behave like
 a singleton.
@@ -254,6 +413,9 @@ name of the service will be retrieved by using the last segment of the *filename
 without any file extensions.
 
 Returns the module to allow method chaining.
+
+#### has(name: String): Boolean
+Returns `true`, if the specified service is defined in this module or a parent module; `false`, otherwise.
 
 #### create(): Module
 Returns a new child of this *Module*.

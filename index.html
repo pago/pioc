@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html>
+
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="description" content="Pioc : A Dependency Injection Container for node.js">
+
+    <link rel="stylesheet" type="text/css" media="screen" href="stylesheets/stylesheet.css">
+
+    <title>Pioc</title>
+  </head>
+
+  <body>
+
+    <!-- HEADER -->
+    <div id="header_wrap" class="outer">
+        <header class="inner">
+          <a id="forkme_banner" href="https://github.com/pago/pioc">View on GitHub</a>
+
+          <h1 id="project_title">Pioc</h1>
+          <h2 id="project_tagline">A Dependency Injection Container for node.js</h2>
+
+            <section id="downloads">
+              <a class="zip_download_link" href="https://github.com/pago/pioc/zipball/master">Download this project as a .zip file</a>
+              <a class="tar_download_link" href="https://github.com/pago/pioc/tarball/master">Download this project as a tar.gz file</a>
+            </section>
+        </header>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div id="main_content_wrap" class="outer">
+      <section id="main_content" class="inner">
+        <h1>
+<a id="pioc---a-dependency-injection-container-for-nodejs" class="anchor" href="#pioc---a-dependency-injection-container-for-nodejs" aria-hidden="true"><span class="octicon octicon-link"></span></a>pioc - A Dependency Injection Container for node.js</h1>
+
+<p>Since you're already here, I suppose you know what Dependency Injection is. If not,
+please take a look at <a href="http://www.martinfowler.com/articles/injection.html">Martin Fowlers Article</a>.
+Don't be afraid, this is a tool for Javascript, not Java, so you won't need to write
+XML or anything like that to configure <strong>pioc</strong>.</p>
+
+<p>The short story is that <strong>pioc</strong> will allow you to write loosely coupled modules which enable you to easily switch specific implementations with something else (i.e. for tests or during natural growth of an application) without the mess that you'd normally have to work through.</p>
+
+<p><strong>pioc</strong> is very smart about how and <em>when</em> to initialize your services. It supports <strong>constructor injection</strong>, <strong>property injection</strong>, static values and even <strong>module inheritance</strong> with all the parts that are needed to make it work.</p>
+
+<p>If you were writing Java, <strong>pioc</strong> would remove the need for the "new" keyword in your vocabulary. For Javascript, it does the same but it also removes many function invocations, <em>require</em> statements and so on.</p>
+
+<p>Whether you're writing an <strong>express.js</strong> application or a website, <strong>pioc</strong> has the features you need to be more productive and it has an extensive test suite.</p>
+
+<h2>
+<a id="license" class="anchor" href="#license" aria-hidden="true"><span class="octicon octicon-link"></span></a>License</h2>
+
+<p><strong>pioc</strong> is <em>MIT</em> licensed.</p>
+
+<h2>
+<a id="installation" class="anchor" href="#installation" aria-hidden="true"><span class="octicon octicon-link"></span></a>Installation</h2>
+
+<pre><code>npm install --save pioc
+</code></pre>
+
+<h2>
+<a id="example" class="anchor" href="#example" aria-hidden="true"><span class="octicon octicon-link"></span></a>Example</h2>
+
+<p>Before I explain any details, let me give you an example of what can be done
+with <strong>pioc</strong> and how it is used.</p>
+
+<div class="highlight highlight-javascript"><pre><span class="pl-c"><span class="pl-pdc">//</span> inside lib/db.js</span>
+<span class="pl-s">var</span> MongoClient <span class="pl-ko">=</span> <span class="pl-sf">require</span>(<span class="pl-s1"><span class="pl-pds">'</span>mongodb<span class="pl-pds">'</span></span>).MongoClient;
+<span class="pl-c"><span class="pl-pdc">//</span> we can write modules that require dependencies by specifying</span>
+<span class="pl-c"><span class="pl-pdc">//</span> module.exports as a function</span>
+<span class="pl-c"><span class="pl-pdc">//</span> This one needs a Promise constructor and the configuration for our app</span>
+<span class="pl-sc">module</span>.<span class="pl-enf">exports</span> <span class="pl-ko">=</span> <span class="pl-s">function</span>(<span class="pl-vpf">Promise</span>, <span class="pl-vpf">config</span>) {
+    <span class="pl-c"><span class="pl-pdc">//</span> you like Promises, don't you?</span>
+    <span class="pl-k">return</span> Promise(<span class="pl-s">function</span>(<span class="pl-vpf">resolve</span>, <span class="pl-vpf">reject</span>) {
+        MongoClient.connect(config.db.url, <span class="pl-s">function</span>(<span class="pl-vpf">err</span>, <span class="pl-vpf">db</span>) {
+            <span class="pl-k">if</span>(err) <span class="pl-k">return</span> reject(err);
+            resolve(db);
+        });
+    });
+};</pre></div>
+
+<div class="highlight highlight-javascript"><pre><span class="pl-c"><span class="pl-pdc">//</span> inside config/development.json</span>
+{
+    <span class="pl-s1"><span class="pl-pds">"</span>db<span class="pl-pds">"</span></span><span class="pl-ko">:</span> {
+        <span class="pl-s1"><span class="pl-pds">"</span>url<span class="pl-pds">"</span></span><span class="pl-ko">:</span> <span class="pl-s1"><span class="pl-pds">"</span>mongodb://localhost:27017/myproject<span class="pl-pds">"</span></span>
+    }
+}</pre></div>
+
+<div class="highlight highlight-javascript"><pre><span class="pl-c"><span class="pl-pdc">//</span> inside app.js</span>
+<span class="pl-s">var</span> pioc <span class="pl-ko">=</span> <span class="pl-sf">require</span>(<span class="pl-s1"><span class="pl-pds">'</span>pioc<span class="pl-pds">'</span></span>),
+    <span class="pl-c"><span class="pl-pdc">//</span> create a new module,</span>
+    <span class="pl-c"><span class="pl-pdc">//</span> by specifying __dirname, we can load services using</span>
+    <span class="pl-c"><span class="pl-pdc">//</span> node.js require relative to the app.js file</span>
+    module <span class="pl-ko">=</span> pioc.createModule(__dirname)
+        <span class="pl-c"><span class="pl-pdc">//</span> not stricly necessary to bind bluebird as a Promise service,</span>
+        <span class="pl-c"><span class="pl-pdc">//</span> but this offers us the option to change to a different implementation</span>
+        <span class="pl-c"><span class="pl-pdc">//</span> easily</span>
+        .value(<span class="pl-s1"><span class="pl-pds">'</span>Promise<span class="pl-pds">'</span></span>, <span class="pl-sf">require</span>(<span class="pl-s1"><span class="pl-pds">'</span>bluebird<span class="pl-pds">'</span></span>))
+        <span class="pl-c"><span class="pl-pdc">//</span> load the config/development.json file and store it as a value service.</span>
+        .loadValue(<span class="pl-s1"><span class="pl-pds">'</span>config/development<span class="pl-pds">'</span></span>)
+        <span class="pl-c"><span class="pl-pdc">//</span> and now load our lib/db.js</span>
+        .<span class="pl-sf">load</span>(<span class="pl-s1"><span class="pl-pds">'</span>lib/db<span class="pl-pds">'</span></span>),
+    <span class="pl-c"><span class="pl-pdc">//</span> a module is not able to do anything on its own, most often, you'll</span>
+    <span class="pl-c"><span class="pl-pdc">//</span> want an injector or provider to go with it</span>
+    injector <span class="pl-ko">=</span> pioc.createInjector(module);
+
+<span class="pl-c"><span class="pl-pdc">//</span> Now let's resolve some dependencies</span>
+injector.resolve(<span class="pl-s">function</span>(<span class="pl-vpf">db</span>) {
+    db.then(<span class="pl-s">function</span>(<span class="pl-vpf">db</span>) {
+        console<span class="pl-sf">.log</span>(<span class="pl-s1"><span class="pl-pds">'</span>successfully connected to the database!<span class="pl-pds">'</span></span>);
+        db.<span class="pl-sf">close</span>();
+    }).catch(<span class="pl-s">function</span>(<span class="pl-vpf">err</span>) {
+        console<span class="pl-sf">.log</span>(err);
+    });
+});</pre></div>
+
+<h2>
+<a id="changes" class="anchor" href="#changes" aria-hidden="true"><span class="octicon octicon-link"></span></a>Changes</h2>
+
+<h3>
+<a id="version-11" class="anchor" href="#version-11" aria-hidden="true"><span class="octicon octicon-link"></span></a>Version 1.1</h3>
+
+<ul>
+<li>
+<strong>Provider#getAll(servicePrefix)</strong>: Returns a list of all services that start with the given prefix</li>
+<li>
+<strong>Property injection</strong>: Constructor functions and objects can use pioc.inject to specify properties that should be injected during the resolve process</li>
+<li>
+<strong>Object instantiation</strong>: Services can now be constructors instead of just simple factory functions.</li>
+<li>Undocumented Module#bind(serviceName).to(serviceDefinition) has been <em>removed</em>.</li>
+<li>
+<strong>Module#bind(obj), Module#value(obj), Module#factory(obj)</strong>: Binds all services defined in the object to their property name.</li>
+<li>
+<strong>Module#has(serviceName)</strong>: Returns <code>true</code>, if the service is defined in the module (or a parent module); <code>false</code>, otherwise.</li>
+<li>Comments in function declarations are <em>ignored</em> (would've resulted in an error previously).</li>
+</ul>
+
+<h2>
+<a id="structure" class="anchor" href="#structure" aria-hidden="true"><span class="octicon octicon-link"></span></a>Structure</h2>
+
+<p>In <strong>pioc</strong>, a <em>Module</em> simply stores <em>service definitions</em> but it has nothing
+at all to do with how they're resolved or injected into other services.</p>
+
+<p>The task of resolving a <em>service definition</em> is the responsibility of the
+<em>Provider</em>. The <em>Injector</em> we saw above is simply a convenient way
+to start an application. Instead of doing it the way I displayed above, you
+could also get a <em>Provider</em> for the <em>Module</em> and ask it to resolve a
+<em>service definition</em> that acts as the starting point of your application.</p>
+
+<p>What that means is simple: If a <em>Module</em> is not responsible for resolving a
+service, then you can create child modules, as well as more than one <em>Provider</em>
+and <em>Injector</em> from the same <em>Module</em> and each of them will provide their
+own instance of your service.</p>
+
+<h2>
+<a id="inheritance" class="anchor" href="#inheritance" aria-hidden="true"><span class="octicon octicon-link"></span></a>Inheritance</h2>
+
+<p><em>Module</em> and <em>Provider</em> can both create children. This allows you to create only
+the amount of instances of a service that you really need. Let's have a look at it.</p>
+
+<div class="highlight highlight-javascript"><pre><span class="pl-s">var</span> pioc <span class="pl-ko">=</span> <span class="pl-sf">require</span>(<span class="pl-s1"><span class="pl-pds">'</span>pioc<span class="pl-pds">'</span></span>),
+    <span class="pl-c"><span class="pl-pdc">//</span> create a module and a child module</span>
+    module <span class="pl-ko">=</span> pioc.createModule(),
+    childModule <span class="pl-ko">=</span> module.create(),
+    <span class="pl-c"><span class="pl-pdc">//</span> create a provider and a child provider</span>
+    provider <span class="pl-ko">=</span> pioc.createProvider(module),
+    childProvider <span class="pl-ko">=</span> provider.create(childModule);
+
+<span class="pl-c"><span class="pl-pdc">//</span> now let's define some services</span>
+module.value(<span class="pl-s1"><span class="pl-pds">'</span>message<span class="pl-pds">'</span></span>, <span class="pl-s1"><span class="pl-pds">'</span>Hello World<span class="pl-pds">'</span></span>)
+    .bind(<span class="pl-s1"><span class="pl-pds">'</span>write<span class="pl-pds">'</span></span>, <span class="pl-s">function</span>() {
+        <span class="pl-k">return</span> <span class="pl-s">function</span>(<span class="pl-vpf">text</span>) {
+            console<span class="pl-sf">.log</span>(text);
+        };
+    })
+    .bind(<span class="pl-s1"><span class="pl-pds">'</span>greeting<span class="pl-pds">'</span></span>, <span class="pl-s">function</span>(<span class="pl-vpf">message</span>) {
+        <span class="pl-k">return</span> message <span class="pl-ko">+</span> <span class="pl-s1"><span class="pl-pds">'</span>!<span class="pl-pds">'</span></span>;
+    })
+    .bind(<span class="pl-s1"><span class="pl-pds">'</span>logger<span class="pl-pds">'</span></span>, <span class="pl-s">function</span>(<span class="pl-vpf">greeting</span>, <span class="pl-vpf">write</span>) {
+        <span class="pl-k">return</span> <span class="pl-s">function</span>() {
+            <span class="pl-sf">write</span>(greeting);
+        };
+    });
+
+<span class="pl-c"><span class="pl-pdc">//</span> override the definition of "message" for the child</span>
+childModule.value(<span class="pl-s1"><span class="pl-pds">'</span>message<span class="pl-pds">'</span></span>, <span class="pl-s1"><span class="pl-pds">'</span>Hello Universe<span class="pl-pds">'</span></span>);
+
+<span class="pl-c"><span class="pl-pdc">//</span> get our services</span>
+<span class="pl-s">var</span> logWorld <span class="pl-ko">=</span> provider.get(<span class="pl-s1"><span class="pl-pds">'</span>logger<span class="pl-pds">'</span></span>),
+    logUniverse <span class="pl-ko">=</span> childProvider.get(<span class="pl-s1"><span class="pl-pds">'</span>logger<span class="pl-pds">'</span></span>);
+
+<span class="pl-c"><span class="pl-pdc">//</span> prints "Hello World!"</span>
+logWorld();
+
+<span class="pl-c"><span class="pl-pdc">//</span> prints "Hello Universe!"</span>
+logUniverse();</pre></div>
+
+<p>Since a <em>Module</em> and a <em>Provider</em> can both create children and inheritance works
+as expected, we can create the same service with entirely different configurations
+as if it was nothing.</p>
+
+<p>However, since <strong>pioc</strong> always tries to limit the instances of a service to the
+minimum, our <em>write</em> service is only instantiated once.</p>
+
+<p>If you're application has modules that need to redefine some dependencies, you
+can create a child module and a new <em>Provider</em> or <em>Injector</em> for the specifiy
+module and it'll receive the proper dependencies.</p>
+
+<h2>
+<a id="available-services-in-an-injector" class="anchor" href="#available-services-in-an-injector" aria-hidden="true"><span class="octicon octicon-link"></span></a>Available services in an <em>Injector</em>
+</h2>
+
+<p>When using an <em>Injector</em>, you gain free access to a few useful services:</p>
+
+<ul>
+<li>
+<strong>$module</strong>: A child of the current <em>Module</em>
+</li>
+<li>
+<strong>$provider</strong>: The currently used <em>Provider</em>
+</li>
+<li>
+<strong>$injector</strong>: The <em>Injector</em> instance</li>
+<li>
+<strong>$pioc</strong>: The <strong>pioc</strong> object</li>
+</ul>
+
+<p>Using these services, you can create sub modules like this:</p>
+
+<div class="highlight highlight-javascript"><pre>injector.resolve(<span class="pl-s">function</span>(<span class="pl-vpf">$pioc</span>, <span class="pl-vpf">$module</span>, <span class="pl-vpf">$provider</span>) {
+    $module.bind(<span class="pl-s1"><span class="pl-pds">'</span>message<span class="pl-pds">'</span></span>, <span class="pl-s1"><span class="pl-pds">'</span>Hi World<span class="pl-pds">'</span></span>);
+    <span class="pl-s">var</span> injector <span class="pl-ko">=</span> $pioc.createInjector($module, $provider);
+    injector.resolve(<span class="pl-s">function</span>(<span class="pl-vpf">logger</span>) {
+        <span class="pl-c"><span class="pl-pdc">//</span> prints "Hi World!" to console.log</span>
+        logger();
+    });
+});</pre></div>
+
+<p>By sharing an ancestoral <em>Provider</em> in you're sub module, you can be certain that
+only those services are freshly instantiated which depend on modified services.</p>
+
+<h2>
+<a id="api-documentation" class="anchor" href="#api-documentation" aria-hidden="true"><span class="octicon octicon-link"></span></a>API Documentation</h2>
+
+<h3>
+<a id="requirepioc" class="anchor" href="#requirepioc" aria-hidden="true"><span class="octicon octicon-link"></span></a>require('pioc')</h3>
+
+<h4>
+<a id="createmodulerootdirectory-string-module" class="anchor" href="#createmodulerootdirectory-string-module" aria-hidden="true"><span class="octicon octicon-link"></span></a>createModule([rootDirectory: String]): Module</h4>
+
+<p>Creates a new <em>Module</em>. If a <em>rootDirectory</em> is specified, the new <em>Module</em>
+will load all services relative to that directory.</p>
+
+<h4>
+<a id="createprovidermodule-module-provider" class="anchor" href="#createprovidermodule-module-provider" aria-hidden="true"><span class="octicon octicon-link"></span></a>createProvider(module: Module): Provider</h4>
+
+<p>Creates a new <em>Provider</em> for the given <em>Module</em>.</p>
+
+<h4>
+<a id="createinjectormodule-module-provider-provider-injector" class="anchor" href="#createinjectormodule-module-provider-provider-injector" aria-hidden="true"><span class="octicon octicon-link"></span></a>createInjector(module: Module[, provider: Provider]): Injector</h4>
+
+<p>Creates a new <em>Injector</em> for the given <em>Module</em>. The <em>Injector</em> will use
+the a child of the given <em>Provider</em> or a new one.</p>
+
+<h4>
+<a id="injectservicename-string-object" class="anchor" href="#injectservicename-string-object" aria-hidden="true"><span class="octicon octicon-link"></span></a>inject(serviceName: String): Object</h4>
+
+<p>Creates an injectable annotation that signals pioc to inject the required service during the resolve process.</p>
+
+<p><em>Example</em></p>
+
+<div class="highlight highlight-javascript"><pre><span class="pl-s">var</span> inject <span class="pl-ko">=</span> pioc.inject;
+module
+    .value(<span class="pl-s1"><span class="pl-pds">'</span>message<span class="pl-pds">'</span></span>, <span class="pl-s1"><span class="pl-pds">'</span>Hello World!<span class="pl-pds">'</span></span>)
+    .bind(<span class="pl-s1"><span class="pl-pds">'</span>foo<span class="pl-pds">'</span></span>, {
+        message<span class="pl-ko">:</span> inject(<span class="pl-s1"><span class="pl-pds">'</span>message<span class="pl-pds">'</span></span>),
+        <span class="pl-enf">sayHello</span>: <span class="pl-s">function</span>() {
+            console<span class="pl-sf">.log</span>(<span class="pl-v">this</span>.message);
+        }
+    });
+provider.get(<span class="pl-s1"><span class="pl-pds">'</span>foo<span class="pl-pds">'</span></span>).sayHello(); <span class="pl-c"><span class="pl-pdc">//</span> =&gt; Hello World!</span></pre></div>
+
+<h4>
+<a id="inject-object" class="anchor" href="#inject-object" aria-hidden="true"><span class="octicon octicon-link"></span></a>inject(): Object</h4>
+
+<p>Creates an injectable annotation that signals pioc to inject the required service during the resolve process.
+The service name will be inferred through the property name.</p>
+
+<p><em>Example</em></p>
+
+<div class="highlight highlight-javascript"><pre>module
+    .value(<span class="pl-s1"><span class="pl-pds">'</span>message<span class="pl-pds">'</span></span>, <span class="pl-s1"><span class="pl-pds">'</span>Hello World!<span class="pl-pds">'</span></span>)
+    .bind(<span class="pl-s1"><span class="pl-pds">'</span>foo<span class="pl-pds">'</span></span>, {
+        message<span class="pl-ko">:</span> pioc.inject(), <span class="pl-c"><span class="pl-pdc">//</span> requires the service "message"</span>
+        <span class="pl-enf">sayHello</span>: <span class="pl-s">function</span>() {
+            console<span class="pl-sf">.log</span>(<span class="pl-v">this</span>.message);
+        }
+    });
+provider.get(<span class="pl-s1"><span class="pl-pds">'</span>foo<span class="pl-pds">'</span></span>).sayHello(); <span class="pl-c"><span class="pl-pdc">//</span> =&gt; Hello World!</span></pre></div>
+
+<h4>
+<a id="injecttargetfunctionobject-servicenames-target" class="anchor" href="#injecttargetfunctionobject-servicenames-target" aria-hidden="true"><span class="octicon octicon-link"></span></a>inject(target:Function|Object, ...serviceNames): target</h4>
+
+<p>Defines injectable annotations for the given service name on the object or the prototype
+of the function and returns the given <code>target</code>.</p>
+
+<p><em>Example</em></p>
+
+<div class="highlight highlight-javascript"><pre><span class="pl-s">var</span> inject <span class="pl-ko">=</span> pioc.inject;
+module
+    .value(<span class="pl-s1"><span class="pl-pds">'</span>message<span class="pl-pds">'</span></span>, <span class="pl-s1"><span class="pl-pds">'</span>Hello World!<span class="pl-pds">'</span></span>)
+    .bind(<span class="pl-s1"><span class="pl-pds">'</span>foo<span class="pl-pds">'</span></span>, inject({
+        <span class="pl-enf">sayHello</span>: <span class="pl-s">function</span>() {
+            console<span class="pl-sf">.log</span>(<span class="pl-v">this</span>.message);
+        }
+    }, <span class="pl-s1"><span class="pl-pds">'</span>message<span class="pl-pds">'</span></span>));
+provider.get(<span class="pl-s1"><span class="pl-pds">'</span>foo<span class="pl-pds">'</span></span>).sayHello(); <span class="pl-c"><span class="pl-pdc">//</span> =&gt; Hello World!</span></pre></div>
+
+<h4>
+<a id="injectservicenames-targetfunctionobject-target" class="anchor" href="#injectservicenames-targetfunctionobject-target" aria-hidden="true"><span class="octicon octicon-link"></span></a>inject(...serviceNames, target:Function|Object): target</h4>
+
+<p>Defines injectable annotations for the given service name on the object or the prototype
+of the function and returns the given <code>target</code>.</p>
+
+<p><em>Example</em></p>
+
+<div class="highlight highlight-javascript"><pre><span class="pl-s">var</span> inject <span class="pl-ko">=</span> pioc.inject;
+module
+    .value(<span class="pl-s1"><span class="pl-pds">'</span>message<span class="pl-pds">'</span></span>, <span class="pl-s1"><span class="pl-pds">'</span>Hello World!<span class="pl-pds">'</span></span>)
+    .bind(<span class="pl-s1"><span class="pl-pds">'</span>foo<span class="pl-pds">'</span></span>, inject(<span class="pl-s1"><span class="pl-pds">'</span>message<span class="pl-pds">'</span></span>, <span class="pl-s">function</span>() {
+        <span class="pl-sc">this</span>.<span class="pl-enf">sayHello</span> <span class="pl-ko">=</span> <span class="pl-s">function</span>() {
+            console<span class="pl-sf">.log</span>(<span class="pl-v">this</span>.message);
+        };
+    }));
+provider.get(<span class="pl-s1"><span class="pl-pds">'</span>foo<span class="pl-pds">'</span></span>).sayHello(); <span class="pl-c"><span class="pl-pdc">//</span> =&gt; Hello World!</span></pre></div>
+
+<h3>
+<a id="injector" class="anchor" href="#injector" aria-hidden="true"><span class="octicon octicon-link"></span></a>Injector</h3>
+
+<h4>
+<a id="resolveservice-functionarray-any" class="anchor" href="#resolveservice-functionarray-any" aria-hidden="true"><span class="octicon octicon-link"></span></a>resolve(service: Function|Array): Any</h4>
+
+<p>Resolves the specified service and returns whatever the service returned.</p>
+
+<p>If a dependency doesn't exist, it'll instead try to load all services with that prefix (see Provider#getAll).</p>
+
+<p><em>Example</em></p>
+
+<div class="highlight highlight-javascript"><pre>module
+    .value(<span class="pl-s1"><span class="pl-pds">'</span>config<span class="pl-pds">'</span></span>, { port<span class="pl-ko">:</span> <span class="pl-cn">3000</span> })
+    .bind(<span class="pl-s1"><span class="pl-pds">'</span>routes/auth<span class="pl-pds">'</span></span>, <span class="pl-sf">require</span>(<span class="pl-s1"><span class="pl-pds">'</span>./app/modules/auth<span class="pl-pds">'</span></span>))
+    .bind(<span class="pl-s1"><span class="pl-pds">'</span>routes/api<span class="pl-pds">'</span></span>, <span class="pl-sf">require</span>(<span class="pl-s1"><span class="pl-pds">'</span>./app/modules/api<span class="pl-pds">'</span></span>));
+<span class="pl-s">var</span> app <span class="pl-ko">=</span> injector.resolve(<span class="pl-s">function</span>(<span class="pl-vpf">routes</span>, <span class="pl-vpf">config</span>) {
+    <span class="pl-s">var</span> app <span class="pl-ko">=</span> express();
+    routes.forEach(<span class="pl-s">function</span>(<span class="pl-vpf">route</span>) { app.use(routes); });
+    <span class="pl-k">return</span> app.listen(config.port);
+});</pre></div>
+
+<h3>
+<a id="provider" class="anchor" href="#provider" aria-hidden="true"><span class="octicon octicon-link"></span></a>Provider</h3>
+
+<h4>
+<a id="getname-string-anyarray" class="anchor" href="#getname-string-anyarray" aria-hidden="true"><span class="octicon octicon-link"></span></a>get(name: String): Any|Array</h4>
+
+<p>Returns an instance of the specified service. If no service with the given name was found,
+an error will be thrown.</p>
+
+<p><strong>throws</strong>: Error, if the specified <em>service</em> is not defined in the <em>module</em> or a parent of the <em>module</em> associated with the <em>Provider</em>.</p>
+
+<h4>
+<a id="getallserviceprefix-string-array" class="anchor" href="#getallserviceprefix-string-array" aria-hidden="true"><span class="octicon octicon-link"></span></a>getAll(servicePrefix: String): Array</h4>
+
+<p>Returns all services whose name starts with the given prefix.</p>
+
+<p><em>Example</em></p>
+
+<div class="highlight highlight-javascript"><pre>module
+    .bind(<span class="pl-s1"><span class="pl-pds">'</span>routes/auth<span class="pl-pds">'</span></span>, <span class="pl-sf">require</span>(<span class="pl-s1"><span class="pl-pds">'</span>./app/modules/auth<span class="pl-pds">'</span></span>))
+    .bind(<span class="pl-s1"><span class="pl-pds">'</span>routes/api<span class="pl-pds">'</span></span>, <span class="pl-sf">require</span>(<span class="pl-s1"><span class="pl-pds">'</span>./app/modules/api<span class="pl-pds">'</span></span>));
+<span class="pl-s">var</span> routes <span class="pl-ko">=</span> provider.getAll(<span class="pl-s1"><span class="pl-pds">'</span>routes/<span class="pl-pds">'</span></span>);
+<span class="pl-s">var</span> app <span class="pl-ko">=</span> express();
+routes.forEach(<span class="pl-s">function</span>(<span class="pl-vpf">route</span>) { app.use(routes); });
+app.listen(<span class="pl-cn">3000</span>);</pre></div>
+
+<h4>
+<a id="createmodule-module-provider" class="anchor" href="#createmodule-module-provider" aria-hidden="true"><span class="octicon octicon-link"></span></a>create(module: Module): Provider</h4>
+
+<p>Returns a new child of this <em>Provider</em> with the specified child <em>Module</em>.</p>
+
+<p><strong>throws</strong>: Error, if the given <em>module</em> is not a child of the <em>module</em> of the
+<em>Provider</em> it is invoked for.</p>
+
+<h3>
+<a id="module" class="anchor" href="#module" aria-hidden="true"><span class="octicon octicon-link"></span></a>Module</h3>
+
+<h4>
+<a id="valuename-string-service-any-module" class="anchor" href="#valuename-string-service-any-module" aria-hidden="true"><span class="octicon octicon-link"></span></a>value(name: String, service: Any): Module</h4>
+
+<p>Binds the specified <em>service</em> to the given <em>name</em>. A service that is bound using
+<em>value</em> will resolved as is, i.e. no dependencies will be injected into it.</p>
+
+<p>Returns the module to allow method chaining.</p>
+
+<h4>
+<a id="valueservicecontainer-object-module" class="anchor" href="#valueservicecontainer-object-module" aria-hidden="true"><span class="octicon octicon-link"></span></a>value(serviceContainer: Object): Module</h4>
+
+<p>For each <em>service</em> as <em>name</em> in <em>serviceContainer</em>, it binds the specified <em>service</em> to the given <em>name</em>.
+A service that is bound using <em>value</em> will resolved as is, i.e. no dependencies will be injected into it.</p>
+
+<p>Returns the module to allow method chaining.</p>
+
+<p><em>Example</em></p>
+
+<div class="highlight highlight-javascript"><pre>module.value({
+    config<span class="pl-ko">:</span> { port<span class="pl-ko">:</span> <span class="pl-cn">3000</span> },
+    db<span class="pl-ko">:</span> { url<span class="pl-ko">:</span> <span class="pl-s1"><span class="pl-pds">'</span>mongodb://...<span class="pl-pds">'</span></span> }
+});
+provider.get(<span class="pl-s1"><span class="pl-pds">'</span>config<span class="pl-pds">'</span></span>).port <span class="pl-ko">===</span> <span class="pl-cn">3000</span>;
+provider.get(<span class="pl-s1"><span class="pl-pds">'</span>db<span class="pl-pds">'</span></span>).url <span class="pl-ko">===</span> <span class="pl-s1"><span class="pl-pds">'</span>mongodb://...<span class="pl-pds">'</span></span>;</pre></div>
+
+<h4>
+<a id="bindname-string-service-any-module" class="anchor" href="#bindname-string-service-any-module" aria-hidden="true"><span class="octicon octicon-link"></span></a>bind(name: String, service: Any): Module</h4>
+
+<p>Binds the specified <em>service</em> to the given <em>name</em>. The service will be resolved
+when needed (i.e. lazy) and behaves like a singleton unless Inheritance requires
+a new instance (i.e. dependencies have been reconfigured for a child module).</p>
+
+<p>Returns the module to allow method chaining.</p>
+
+<h4>
+<a id="bindservicecontainer-object-module" class="anchor" href="#bindservicecontainer-object-module" aria-hidden="true"><span class="octicon octicon-link"></span></a>bind(serviceContainer: Object): Module</h4>
+
+<p>For each <em>service</em> as <em>name</em> in <em>serviceContainer</em>, it binds the specified <em>service</em> to the given <em>name</em>. The service will be resolved
+when needed (i.e. lazy) and behaves like a singleton unless Inheritance requires
+a new instance (i.e. dependencies have been reconfigured for a child module).</p>
+
+<p>Returns the module to allow method chaining.</p>
+
+<h4>
+<a id="bindfactoryname-string-service-any-module" class="anchor" href="#bindfactoryname-string-service-any-module" aria-hidden="true"><span class="octicon octicon-link"></span></a>bindFactory(name: String, service: Any): Module</h4>
+
+<p>Binds the specified <em>service</em> to the given <em>name</em>. The service will be resolved
+when needed (i.e. lazy) and will be instantiated whenever the specified service is
+requested. This is intended to be used for services that should never behave like
+a singleton.</p>
+
+<p>Returns the module to allow method chaining.</p>
+
+<h4>
+<a id="bindfactoryservicecontainer-object-module" class="anchor" href="#bindfactoryservicecontainer-object-module" aria-hidden="true"><span class="octicon octicon-link"></span></a>bindFactory(serviceContainer: Object): Module</h4>
+
+<p>For each <em>service</em> as <em>name</em> in <em>serviceContainer</em>, it binds the specified <em>service</em> to the given <em>name</em>. The service will be resolved
+when needed (i.e. lazy) and will be instantiated whenever the specified service is
+requested. This is intended to be used for services that should never behave like
+a singleton.</p>
+
+<p>Returns the module to allow method chaining.</p>
+
+<h4>
+<a id="loadvaluename-string-filename-string-module" class="anchor" href="#loadvaluename-string-filename-string-module" aria-hidden="true"><span class="octicon octicon-link"></span></a>loadValue([name: String, ]filename: String): Module</h4>
+
+<p>Loads a service using require. The module.exports of the file will be bound as a
+value.</p>
+
+<p>If <em>name</em> is specified, the service will be bound by that name, otherwise, the
+name of the service will be retrieved by using the last segment of the <em>filename</em>,
+without any file extensions.</p>
+
+<p>Returns the module to allow method chaining.</p>
+
+<h4>
+<a id="loadname-string-filename-string-module" class="anchor" href="#loadname-string-filename-string-module" aria-hidden="true"><span class="octicon octicon-link"></span></a>load([name: String, ]filename: String): Module</h4>
+
+<p>Loads a service using require. The module.exports of the file will be bound to
+this module.</p>
+
+<p>If <em>name</em> is specified, the service will be bound by that name, otherwise, the
+name of the service will be retrieved by using the last segment of the <em>filename</em>,
+without any file extensions.</p>
+
+<p>Returns the module to allow method chaining.</p>
+
+<h4>
+<a id="loadfactoryname-string-filename-string-module" class="anchor" href="#loadfactoryname-string-filename-string-module" aria-hidden="true"><span class="octicon octicon-link"></span></a>loadFactory([name: String, ]filename: String): Module</h4>
+
+<p>Loads a service using require. The module.exports of the file will be bound to
+this module as a factory.</p>
+
+<p>If <em>name</em> is specified, the service will be bound by that name, otherwise, the
+name of the service will be retrieved by using the last segment of the <em>filename</em>,
+without any file extensions.</p>
+
+<p>Returns the module to allow method chaining.</p>
+
+<h4>
+<a id="hasname-string-boolean" class="anchor" href="#hasname-string-boolean" aria-hidden="true"><span class="octicon octicon-link"></span></a>has(name: String): Boolean</h4>
+
+<p>Returns <code>true</code>, if the specified service is defined in this module or a parent module; <code>false</code>, otherwise.</p>
+
+<h4>
+<a id="create-module" class="anchor" href="#create-module" aria-hidden="true"><span class="octicon octicon-link"></span></a>create(): Module</h4>
+
+<p>Returns a new child of this <em>Module</em>.</p>
+      </section>
+    </div>
+
+    <!-- FOOTER  -->
+    <div id="footer_wrap" class="outer">
+      <footer class="inner">
+        <p class="copyright">Pioc maintained by <a href="https://github.com/pago">pago</a></p>
+        <p>Published with <a href="http://pages.github.com">GitHub Pages</a></p>
+      </footer>
+    </div>
+
+              <script type="text/javascript">
+            var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+            document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+          </script>
+          <script type="text/javascript">
+            try {
+              var pageTracker = _gat._getTracker("UA-56823995-1");
+            pageTracker._trackPageview();
+            } catch(err) {}
+          </script>
+
+
+  </body>
+</html>

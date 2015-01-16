@@ -27,7 +27,7 @@ function getDependencyList(service) {
         type = toString.call(service);
     if(type === '[object Function]') {
         return {
-            callInjection: service.$requires || parseFunctionArguments(service),
+            callInjection: service.$requires || service['@require'] || parseFunctionArguments(service),
             propertyInjection: service.prototype && getInjectableProperties(service.prototype)
         };
     } else if(type === '[object Array]') {

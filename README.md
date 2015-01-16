@@ -89,6 +89,7 @@ injector.resolve(function(db) {
 ### Version 1.2
 - **inject.lazy(serviceName)**: Specify a lazy property injection.
 - **Symbol support**: Support injecting properties that are defined using ES6 Symbol.
+- **Support @require syntax**: Provides support with Electrolyte style annotations.
 
 ### Version 1.1
 

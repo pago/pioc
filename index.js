@@ -48,7 +48,11 @@ function getInjectableProperties(inst) {
             descriptor = property.descriptor,
             propName = property.name;
         if(descriptor.value && descriptor.value.$$inject) {
-            properties[properties.length] = {serviceName: descriptor.value.serviceName || propName, propName: propName};
+            properties[properties.length] = {
+                serviceName: descriptor.value.serviceName || propName,
+                propName: propName,
+                lazy: !!descriptor.value.$$lazy
+            };
         }
     }
     return properties;
@@ -100,6 +104,29 @@ function getFactory(service) {
     return function() { return service; };
 }
 
+function defineLazyInstanceProperty(inst, propName, serviceName, provider) {
+    Object.defineProperty(inst, propName, {
+        get: function() {
+            var service = provider.$module.has(serviceName) ?
+                provider.get(serviceName) :
+                provider.getAll(serviceName);
+            Object.defineProperty(inst, propName, {
+                value: service
+            });
+            return service;
+        },
+        configurable: true
+    });
+}
+
+function defineInstanceProperty(inst, propName, serviceName, provider) {
+    Object.defineProperty(inst, propName, {
+        value: provider.$module.has(serviceName) ?
+            provider.get(serviceName) :
+            provider.getAll(serviceName)
+    });
+}
+
 function resolve(service, provider) {
     var inst,
         args = service.dependencies.callInjection.map(function(serviceName) {
@@ -111,8 +138,13 @@ function resolve(service, provider) {
         inst = Object.create(service.factory.prototype || Object.prototype);
     }
     for(var propInjections = service.dependencies.propertyInjection, i = 0, len = propInjections.length; i < len; i++) {
-        var prop = propInjections[i], serviceName = prop.serviceName;
-        Object.defineProperty(inst, prop.propName, { value: provider.$module.has(serviceName) ? provider.get(serviceName) : provider.getAll(serviceName) });
+        var prop = propInjections[i],
+            serviceName = prop.serviceName;
+        if(prop.lazy) {
+            defineLazyInstanceProperty(inst, prop.propName, serviceName, provider);
+        } else {
+            defineInstanceProperty(inst, prop.propName, serviceName, provider);
+        }
     }
     return service.factory.$isObjectFactory ? inst : (service.factory.apply(inst, args) || inst);
 }
@@ -398,6 +430,14 @@ var pioc = {
             $$inject: true
         };
     }
+};
+
+pioc.inject.lazy = function(serviceName) {
+    return {
+        serviceName: serviceName,
+        $$inject: true,
+        $$lazy: true
+    };
 };
 
 // make pioc a service that can be accessed in services

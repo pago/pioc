@@ -220,6 +220,28 @@ describe('Provider', function() {
         var post = provider.get('post');
         expect(post.greeting).to.equal('Hello World!');
     });
+
+    it('should resolve services lazy when asked to', function() {
+        var inject = pioc.inject;
+        module.bind('test', {
+            printer: inject.lazy('printer'),
+            test: function() {
+                return this.printer.message;
+            }
+        }).bind('printer', {
+            test: inject.lazy('test'),
+            message: inject('message'),
+            print: function() {
+                // well.. we're going from this => test => this => message
+                // but that should show that cyclic references work
+                return this.test.printer.message;
+            }
+        });
+        var printer = provider.get('printer');
+        expect(printer.print()).to.equal(provider.get('message'));
+        expect(printer.print()).to.equal(provider.get('message'));
+        expect(provider.get('test').test()).to.equal(provider.get('message'));
+    });
 });
 
 describe('Injector', function() {

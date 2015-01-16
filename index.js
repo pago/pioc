@@ -173,7 +173,7 @@ var Module = {
             var names = Object.getOwnPropertyNames(name);
             for(var i = 0, len = names.length; i < len; i++) {
                 var serviceName = names[i];
-                this.value(serviceName, name[serviceName]);
+                this.bind(serviceName, name[serviceName]);
             }
         }
         this[servicePropertyPrefix+name] = {
@@ -188,7 +188,7 @@ var Module = {
             var names = Object.getOwnPropertyNames(name);
             for(var i = 0, len = names.length; i < len; i++) {
                 var serviceName = names[i];
-                this.value(serviceName, name[serviceName]);
+                this.bindFactory(serviceName, name[serviceName]);
             }
         }
         this[servicePropertyPrefix+name] = {

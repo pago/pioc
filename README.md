@@ -86,10 +86,14 @@ injector.resolve(function(db) {
 
 ## Changes
 
+### Version 1.2
+- **inject.lazy(serviceName)**: Specify a lazy property injection.
+- **Symbol support**: Support injecting properties that are defined using ES6 Symbol.
+
 ### Version 1.1
 
-- **Provider#getAll(servicePrefix)**: Returns a list of all services that start with the given prefix
-- **Property injection**: Constructor functions and objects can use pioc.inject to specify properties that should be injected during the resolve process
+- **Provider#getAll(servicePrefix)**: Returns a list of all services that start with the given prefix.
+- **Property injection**: Constructor functions and objects can use pioc.inject to specify properties that should be injected during the resolve process.
 - **Object instantiation**: Services can now be constructors instead of just simple factory functions.
 - Undocumented Module#bind(serviceName).to(serviceDefinition) has been *removed*.
 - **Module#bind(obj), Module#value(obj), Module#factory(obj)**: Binds all services defined in the object to their property name.
@@ -223,6 +227,31 @@ module
         }
     });
 provider.get('foo').sayHello(); // => Hello World!
+```
+
+#### inject.lazy(serviceName: String): Object
+Creates an injectable annotation that signals pioc to inject the required service as
+soon as it is accessed. Using this annotation allows circular dependencies.
+
+*Example*
+
+```javascript
+var inject = pioc.inject;
+module
+    .value('message', 'Hello World!')
+    .bind('test', {
+        printer: inject.lazy('printer'),
+    }).bind('printer', {
+        test: inject.lazy('test'),
+        message: inject('message'),
+        print: function() {
+            // well.. we're going from this => test => this => message
+            // but that should show that cyclic references work
+            return this.test.printer.message;
+        }
+    });
+var printer = provider.get('printer');
+expect(printer.print()).to.equal(provider.get('message'));
 ```
 
 #### inject(): Object

@@ -54,11 +54,25 @@ function getInjectableProperties(inst) {
     return properties;
 }
 
+var getKeys = (function() {
+    if(Object.getOwnPropertySymbols) {
+        return function(proto) {
+            var keys = Object.getOwnPropertyNames(proto),
+                symbols = Object.getOwnPropertySymbols(proto);
+            return keys.concat.apply(keys, symbols);
+        };
+    } else {
+        return function(proto) {
+            return Object.getOwnPropertyNames(proto);
+        };
+    }
+}());
+
 function getPropertyDescriptors(obj, omitDescriptors) {
     var unique = {},
         properties = [];
     for(var proto = obj; proto && proto !== Object.prototype; proto = Object.getPrototypeOf(proto)) {
-        var names = Object.getOwnPropertyNames(proto);
+        var names = getKeys(proto);
         for(var i = 0, len = names.length; i < len; i++) {
             var name = names[i];
             if(!unique['$$'+name]) {

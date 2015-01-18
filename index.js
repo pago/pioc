@@ -262,7 +262,11 @@ function isResponsibleFor(provider, name, service, $parent) {
         return false;
     }
 
-    var dependencies = service.dependencies.callInjection.concat(service.dependencies.propertyInjection);
+    var dependencies = service.dependencies.callInjection.concat(
+        service.dependencies.propertyInjection.map(function(service) {
+            return service.serviceName;
+        })
+    );
     for(var i = 0, len = dependencies.length; i < len; i++) {
         var dependency = dependencies[i],
             isResponsibleForDependency = isResponsibleFor(

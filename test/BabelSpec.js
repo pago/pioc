@@ -1,7 +1,7 @@
+require('babel/polyfill');
+
 var expect = require('chai').expect,
     pioc = require('../index');
-
-require('6to5/polyfill');
 
 describe('Resolver', function() {
     it('can resolve Symbol properties', function() {
@@ -19,6 +19,9 @@ describe('Resolver', function() {
             .bind('data', dataObject),
             provider = pioc.createProvider($module);
         var test = provider.get('data');
+        expect(typeof Reflect).to.equal('object');
+        expect(process.version).to.equal('v0.10.35');
+        expect(test[printer]).to.equal('Hello World!');
         expect(test.getMessage()).to.equal('Hello World!');
     });
 });

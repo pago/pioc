@@ -6,7 +6,7 @@ module.exports = function () {
         ],
 
         tests: [
-            'test/*.js'
+            'test/*Spec.js'
         ],
 
         env: {
@@ -14,6 +14,9 @@ module.exports = function () {
             runner: 'node'
         },
 
-        testFramework: 'mocha@2.1.0'
+        testFramework: 'mocha@2.1.0',
+        preprocessors: {
+            '**/*Spec.js': file => require('babel').transform(file.content, {sourceMap: true, experimental: true})
+        }
     };
 };

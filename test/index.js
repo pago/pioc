@@ -139,6 +139,19 @@ describe('Provider', function() {
         expect(routes[1]).to.equal('Hello World!');
     });
 
+    it('should find all services for a given suffix', function() {
+        module.bind('api/route', function(message) { return message; });
+        module.bind('auth/route', function(greeting) { return greeting; });
+
+        var subModule = module.create(),
+            childProvider = provider.create(subModule);
+
+        var routes = childProvider.getAll('route');
+        expect(routes.length).to.equal(2);
+        expect(routes[0]).to.equal('Hello World');
+        expect(routes[1]).to.equal('Hello World!');
+    });
+
     it('should create a new instance of a class if needed', function() {
         function Post(message) {
             this.message = message;

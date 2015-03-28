@@ -1,5 +1,4 @@
-var path = require('path'),
-    Resolver = require('./lib/Resolver'),
+var Resolver = require('./lib/Resolver'),
     Module = require('./lib/Module'),
     Provider = require('./lib/Provider'),
     Injector = require('./lib/Injector'),

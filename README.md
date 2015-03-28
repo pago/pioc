@@ -86,6 +86,11 @@ injector.resolve(function(db) {
 
 ## Changes
 
+### Version 1.3
+- **provider.get()**: Now performs a suffix search if the service is unknown and the prefix search was unsuccessful as well.
+- The resolution (finding dependencies, resolving them) algorithm is now pluggable and can be changed by
+  through the pioc.resolver property
+
 ### Version 1.2
 - **inject.lazy(serviceName)**: Specify a lazy property injection.
 - **Symbol support**: Support injecting properties that are defined using ES6 Symbol.
@@ -214,6 +219,10 @@ the a child of the given *Provider* or a new one.
 
 #### inject(serviceName: String): Object
 Creates an injectable annotation that signals pioc to inject the required service during the resolve process.
+
+#### resolver: Object
+The Resolver object that is used throughout the system to analyse dependencies of services
+and to resolve them.
 
 *Example*
 
